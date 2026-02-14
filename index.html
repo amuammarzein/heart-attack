@@ -1,0 +1,544 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Heart Attack: Deteksi Tangan, Isi Daya, Hancurkan!</title>
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&display=swap" rel="stylesheet">
+
+    <style>
+        :root { --p1: #00d2ff; --p2: #ff007f; --accent: #00ffcc; --danger: #ff3333; }
+        body, html { margin: 0; padding: 0; width: 100%; height: 100%; background: #000; color: white; font-family: 'Orbitron'; overflow: hidden; }
+        canvas { width: 100vw; height: 100vh; object-fit: cover; transform: scaleX(-1); }
+
+        .overlay { 
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%; 
+            background: rgba(0,0,0,0.85); z-index: 100; 
+            display: flex; flex-direction: column; justify-content: center; align-items: center; 
+            text-align: center; 
+        }
+        #win-screen { background: rgba(0, 210, 255, 0.15); display: none; }
+
+        .hud-top { position: absolute; top: 20px; width: 100%; display: flex; flex-direction: column; align-items: center; z-index: 10; pointer-events: none; }
+        .boss-hp-bar { width: 60%; height: 12px; border: 1px solid rgba(255,255,255,0.3); border-radius: 10px; background: rgba(255,0,0,0.1); overflow: hidden; }
+        #boss-hp-fill { width: 100%; height: 100%; background: linear-gradient(90deg, #ffea00, #ff0000); transition: width 0.3s ease; }
+
+        .charge-ui { position: absolute; bottom: 40px; width: 100%; display: flex; flex-direction: column; align-items: center; z-index: 10; pointer-events: none; }
+        #status-msg { 
+            margin-bottom: 12px; font-size: 0.9rem; padding: 8px 25px; 
+            background: rgba(0, 0, 0, 0.7); border-radius: 30px; 
+            border: 1px solid var(--accent); color: var(--accent);
+            text-shadow: 0 0 10px rgba(0, 255, 204, 0.5); box-shadow: 0 0 15px rgba(0,0,0,0.5);
+        }
+        .charge-bar { width: 300px; height: 12px; border-radius: 15px; background: rgba(255,255,255,0.1); overflow: hidden; border: 1px solid rgba(255,255,255,0.2); }
+        #charge-fill { width: 0%; height: 100%; background: linear-gradient(90deg, #00ffcc, #00d2ff); transition: width 0.1s ease; }
+
+        #timer-text { font-size: 8rem; color: #ffff00; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); display: none; z-index: 20; font-weight: bold; text-shadow: 0 0 20px rgba(255,255,0,0.5); pointer-events: none; }
+        
+        #countdown-overlay {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            display: none; justify-content: center; align-items: center;
+            z-index: 200; pointer-events: none;
+        }
+        #countdown-number {
+            font-size: 15rem; font-weight: 900; color: #fff;
+            text-shadow: 0 0 30px var(--accent), 0 0 60px var(--p1);
+            font-family: 'Orbitron';
+        }
+
+        #hit-alert { position: fixed; top:0; left:0; width:100%; height:100%; background: radial-gradient(circle, rgba(255,0,0,0) 40%, rgba(255,0,0,0.6) 100%); opacity: 0; pointer-events:none; z-index:50; transition: opacity 0.1s; }
+        
+        #critical-alert { 
+            position: fixed; top: 40%; left: 50%; transform: translate(-50%, -50%); 
+            color: #ff3333; font-size: 3.5rem; font-weight: 900; text-shadow: 0 0 20px #ff0000; 
+            display: none; z-index: 100; pointer-events: none; letter-spacing: 5px; text-align: center;
+        }
+
+        .pop-text { position: fixed; font-weight: bold; pointer-events: none; z-index: 60; text-shadow: 0 0 10px #000; }
+        .dmg-val { color: #00ffcc; font-size: 3.5rem; }
+        .minus-val { color: var(--danger); font-size: 2.5rem; }
+        
+        .btn-action { padding: 18px 50px; border-radius: 50px; border: none; background: linear-gradient(45deg, var(--p1), var(--p2)); color: white; cursor: pointer; font-family: 'Orbitron'; font-weight: bold; margin-top: 25px; box-shadow: 0 0 20px var(--p1); transition: transform 0.2s; }
+    </style>
+</head>
+<body>
+
+<div id="hit-alert"></div>
+<div id="critical-alert">CRITICAL SYNC FAILED<br><span style="font-size: 1.5rem">CHARGE RESET</span></div>
+<canvas id="output_canvas"></canvas>
+<div id="timer-text">3</div>
+
+<div id="countdown-overlay">
+    <div id="countdown-number"></div>
+</div>
+
+<div class="hud-top">
+    <div id="boss-status" style="color: #00f2ff; font-size: 0.9rem; letter-spacing: 4px; margin-bottom: 5px; text-shadow: 2px 2px #000;">PHASE 1 : INITIAL INFECTION</div>
+    <div class="boss-hp-bar"><div id="boss-hp-fill"></div></div>
+</div>
+
+<div id="start-menu" class="overlay">
+    <h1 style="font-size: 3.5rem; margin-bottom: 0; letter-spacing: 5px;">HEART ATTACK</h1>
+    <p style="color: var(--accent); margin-top: 10px;">STATUS : <span style="color:var(--danger)">SYSTEM INFECTED</span></p>
+    <button class="btn-action" onclick="startGame()">START MISSION</button>
+</div>
+
+<div id="win-screen" class="overlay">
+    <h1 style="font-size: 4rem; color: var(--accent); margin: 0;">MISSION COMPLETE</h1>
+    <p style="font-size: 1.2rem; letter-spacing: 5px; margin-top: 10px;">TARGET NEUTRALIZED</p>
+    <button class="btn-action" onclick="location.reload()">RE-DEPLOY</button>
+</div>
+
+<div class="charge-ui">
+    <div id="status-msg">SYNCING BIOMETRICS...</div>
+    <div class="charge-bar"><div id="charge-fill"></div></div>
+</div>
+
+<video id="input_video" style="display:none"></video>
+
+<script>
+    const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+
+    function playSynthSound(type, freq, duration, vol = 0.2) {
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.type = type;
+        osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
+        if (type === 'square' || type === 'sawtooth') {
+            osc.frequency.exponentialRampToValueAtTime(freq / 2, audioCtx.currentTime + duration);
+        }
+        gain.gain.setValueAtTime(vol, audioCtx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + duration);
+        osc.connect(gain);
+        gain.connect(audioCtx.destination);
+        osc.start();
+        osc.stop(audioCtx.currentTime + duration);
+    }
+
+    const sfx = {
+        start: () => playSynthSound('sine', 440, 0.5),
+        count: () => playSynthSound('square', 300, 0.15, 0.3),
+        go: () => {
+            playSynthSound('sine', 600, 0.5, 0.4);
+            playSynthSound('sawtooth', 200, 0.4, 0.2);
+        },
+        shoot: () => playSynthSound('triangle', 150, 0.2, 0.1),
+        hit: () => playSynthSound('sawtooth', 100, 0.3, 0.3),
+        damage: () => playSynthSound('square', 880, 0.1, 0.2),
+        critical: () => {
+            playSynthSound('square', 100, 0.3, 0.5);
+            playSynthSound('sawtooth', 50, 0.5, 0.4);
+        },
+        charging: (p) => playSynthSound('sawtooth', 200 + (p * 5), 0.05, 0.03),
+        chargeFull: () => {
+            playSynthSound('sine', 880, 0.2);
+            setTimeout(() => playSynthSound('sine', 1100, 0.4), 100);
+            playSynthSound('sawtooth', 50, 0.5, 0.4);
+        },
+        win: () => {
+            [440, 554, 659, 880].forEach((f, i) => {
+                setTimeout(() => playSynthSound('sine', f, 0.6), i * 150);
+            });
+        }
+    };
+
+    let hands, camera, canvasCtx, canvasElement;
+    let isRunning = false, isFullCharge = false, gameWon = false;
+    let charge = 0, bossHP = 1200, maxHP = 1200; 
+    let bossPos = { x: 500, y: 300 }, bossTarget = { x: 500, y: 300 };
+    let bullets = [], particles = [];
+    let lastHitTime = 0, lastCriticalTime = 0; // Added tracker for critical delay
+    let bossPhase = 1, timerValue = 5, frameCount = 0;
+    
+    let pointer1 = { x: 0, y: 0, targetX: 0, targetY: 0 };
+    let pointer2 = { x: 0, y: 0, targetX: 0, targetY: 0 };
+    let thumb1 = { x: 0, y: 0, targetX: 0, targetY: 0 };
+    let thumb2 = { x: 0, y: 0, targetX: 0, targetY: 0 };
+    let playerMid = { x: 0, y: 0, active: false }, lastPlayerMid = { x: 0, y: 0 };
+
+    class Particle {
+        constructor(x, y, color, speed = 1) {
+            this.x = x; this.y = y;
+            this.size = Math.random() * 5 + 2;
+            this.vx = (Math.random() - 0.5) * 12 * speed;
+            this.vy = (Math.random() - 0.5) * 12 * speed;
+            this.life = 1.0;
+            this.color = color;
+        }
+        update() { this.x += this.vx; this.y += this.vy; this.life -= 0.03; }
+        draw() {
+            canvasCtx.save();
+            canvasCtx.globalAlpha = this.life;
+            canvasCtx.fillStyle = this.color;
+            canvasCtx.shadowBlur = 10;
+            canvasCtx.shadowColor = this.color;
+            canvasCtx.beginPath(); canvasCtx.arc(this.x, this.y, this.size, 0, Math.PI*2);
+            canvasCtx.fill(); canvasCtx.restore();
+        }
+    }
+
+    function createExplosion(x, y, count, color, speed) {
+        for(let i=0; i<count; i++) particles.push(new Particle(x, y, color, speed));
+    }
+
+    function distToSegment(p, v, w) {
+        let l2 = (v.x - w.x)**2 + (v.y - w.y)**2;
+        if (l2 == 0) return Math.sqrt((p.x - v.x)**2 + (p.y - v.y)**2);
+        let t = Math.max(0, Math.min(1, ((p.x - v.x) * (w.x - v.x) + (p.y - v.y) * (w.y - v.y)) / l2));
+        return Math.sqrt((p.x - (v.x + t * (w.x - v.x)))**2 + (p.y - (v.y + t * (w.y - v.y)))**2);
+    }
+
+    function init() {
+        canvasElement = document.getElementById('output_canvas');
+        canvasCtx = canvasElement.getContext('2d');
+        hands = new Hands({locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`});
+        hands.setOptions({ maxNumHands: 2, modelComplexity: 1, minDetectionConfidence: 0.6, minTrackingConfidence: 0.6 });
+        hands.onResults(onResults);
+    }
+
+    function startGame() {
+        if(audioCtx.state === 'suspended') audioCtx.resume();
+        $('#start-menu').fadeOut();
+        camera = new Camera(document.getElementById('input_video'), {
+            onFrame: async () => { await hands.send({image: document.getElementById('input_video')}); },
+            width: 1280, height: 720
+        });
+        camera.start();
+        runStartCountdown();
+    }
+
+    function runStartCountdown() {
+        const counts = ["3", "2", "1", "GO!"];
+        let i = 0;
+        $('#countdown-overlay').css('display', 'flex');
+        const interval = setInterval(() => {
+            if (i < counts.length) {
+                $('#countdown-number').text(counts[i]);
+                if (counts[i] === "GO!") { sfx.go(); $('#countdown-number').css('color', 'var(--accent)'); }
+                else { sfx.count(); }
+                $('#countdown-number').hide().fadeIn(150);
+                i++;
+            } else {
+                clearInterval(interval);
+                $('#countdown-overlay').fadeOut(300, () => {
+                    isRunning = true;
+                    moveBoss();
+                    shootCycle();
+                });
+            }
+        }, 1000);
+    }
+
+    function moveBoss() {
+        if(!isRunning || gameWon) return;
+        let speedMult = bossPhase === 3 ? 2.8 : (bossPhase === 2 ? 2.0 : 1.2);
+        bossTarget.x = 200 + Math.random() * (canvasElement.width - 400);
+        bossTarget.y = 150 + Math.random() * (canvasElement.height - 300);
+        setTimeout(moveBoss, 1400 / speedMult);
+    }
+
+    function shootCycle() {
+        if(!isRunning || gameWon) return;
+        if(playerMid.active) {
+            let angle = Math.atan2(playerMid.y - bossPos.y, playerMid.x - bossPos.x);
+            let bSpeed = bossPhase === 3 ? 16 : (bossPhase === 2 ? 14 : 12);
+            let bulletSize = 12;
+            sfx.shoot();
+            if (bossPhase === 1) {
+                bullets.push({ x: bossPos.x, y: bossPos.y, vx: Math.cos(angle) * bSpeed, vy: Math.sin(angle) * bSpeed, size: bulletSize });
+            } else if (bossPhase === 2) {
+                [-0.2, 0.2].forEach(off => {
+                    bullets.push({ x: bossPos.x, y: bossPos.y, vx: Math.cos(angle + off) * bSpeed, vy: Math.sin(angle + off) * bSpeed, size: bulletSize });
+                });
+            } else {
+                [-0.4, 0, 0.4].forEach(off => {
+                    bullets.push({ x: bossPos.x, y: bossPos.y, vx: Math.cos(angle + off) * bSpeed, vy: Math.sin(angle + off) * bSpeed, size: bulletSize });
+                });
+            }
+        }
+        let interval = bossPhase === 3 ? 1000 : (bossPhase === 2 ? 1400 : 2000);
+        setTimeout(shootCycle, interval);
+    }
+
+    function onResults(results) {
+        frameCount++;
+        canvasElement.width = window.innerWidth;
+        canvasElement.height = window.innerHeight;
+        canvasCtx.save();
+        canvasCtx.drawImage(results.image, 0, 0, canvasElement.width, canvasElement.height);
+
+        let hpPercent = (bossHP / maxHP) * 100;
+        if(hpPercent <= 30) { bossPhase = 3; $('#boss-status').text("PHASE 3 : CRITICAL CORRUPTION").css('color', '#ff0000'); }
+        else if(hpPercent <= 65) { bossPhase = 2; $('#boss-status').text("PHASE 2: SYSTEM SPREADING").css('color', '#ff8800'); }
+
+        
+        let isLoveGesture = false;
+
+        if (results.multiHandLandmarks && results.multiHandLandmarks.length >= 2) {
+        // Ambil Landmark
+        const h1_8 = results.multiHandLandmarks[0][8]; // Telunjuk P1
+        const h1_4 = results.multiHandLandmarks[0][4]; // Jempol P1
+        const h2_8 = results.multiHandLandmarks[1][8]; // Telunjuk P2
+        const h2_4 = results.multiHandLandmarks[1][4]; // Jempol P2
+
+        // Update Target
+        pointer1.targetX = h1_8.x * canvasElement.width;
+        pointer1.targetY = h1_8.y * canvasElement.height;
+        pointer2.targetX = h2_8.x * canvasElement.width;
+        pointer2.targetY = h2_8.y * canvasElement.height;
+        
+        thumb1.targetX = h1_4.x * canvasElement.width;
+        thumb1.targetY = h1_4.y * canvasElement.height;
+        thumb2.targetX = h2_4.x * canvasElement.width;
+        thumb2.targetY = h2_4.y * canvasElement.height;
+
+        let distTips = Math.sqrt((pointer1.targetX - pointer2.targetX)**2 + (pointer1.targetY - pointer2.targetY)**2);
+        let distThumbs = Math.sqrt((thumb1.targetX - thumb2.targetX)**2 + (thumb1.targetY - thumb2.targetY)**2);
+        
+        if(distTips < 150 && distThumbs < 150) isLoveGesture = true;
+        playerMid.active = true;
+    }else { 
+            playerMid.active = false; 
+        }
+
+       // Smooth movement
+        pointer1.x += (pointer1.targetX - pointer1.x) * 0.25;
+        pointer1.y += (pointer1.targetY - pointer1.y) * 0.25;
+        pointer2.x += (pointer2.targetX - pointer2.x) * 0.25;
+        pointer2.y += (pointer2.targetY - pointer2.y) * 0.25;
+        thumb1.x += (thumb1.targetX - thumb1.x) * 0.25;
+        thumb1.y += (thumb1.targetY - thumb1.y) * 0.25;
+        thumb2.x += (thumb2.targetX - thumb2.x) * 0.25;
+        thumb2.y += (thumb2.targetY - thumb2.y) * 0.25;
+
+        playerMid.x = (pointer1.x + pointer2.x)/2;
+        playerMid.y = (pointer1.y + pointer2.y)/2;
+
+        particles.forEach((p, i) => { p.update(); p.draw(); if(p.life <= 0) particles.splice(i, 1); });
+
+        if (isRunning && !gameWon) {
+            bossPos.x += (bossTarget.x - bossPos.x) * 0.05;
+            bossPos.y += (bossTarget.y - bossPos.y) * 0.05;
+            let floatY = bossPos.y + Math.sin(frameCount * 0.1) * 25;
+            
+            canvasCtx.shadowBlur = 15;
+            canvasCtx.shadowColor = (bossPhase === 3) ? "#ff0000" : "#00f2ff";
+            canvasCtx.font = "bold 60px Orbitron";
+            canvasCtx.textAlign = "center";
+            let bossIcon = (bossPhase === 3) ? "╰(╬◣∀◢)╯" : (bossPhase === 2 ? "(◣_◢)" : "[⬢_⬢]");
+            let bossColor = "#ffffff"; // Default Putih (Phase 1)
+            if (bossPhase === 2) bossColor = "#ff8800"; // Orange (Phase 2)
+            if (bossPhase === 3) bossColor = "#ff3333"; // Merah (Phase 3)
+            canvasCtx.fillStyle = bossColor;
+            canvasCtx.fillText(bossIcon, bossPos.x, floatY);
+
+            bullets.forEach((b, i) => {
+                b.x += b.vx; b.y += b.vy;
+                canvasCtx.beginPath(); canvasCtx.arc(b.x, b.y, b.size, 0, Math.PI*2);
+                canvasCtx.fillStyle = (bossPhase === 3) ? "#ffea00" : "#ff0000"; 
+                canvasCtx.fill();
+                if(playerMid.active) {
+                    let dLink = distToSegment(b, pointer1, pointer2);
+                    if(dLink < 35) { bullets.splice(i, 1); triggerWeaponHit(playerMid.x, playerMid.y); }
+                }
+                if(b.x < 0 || b.x > canvasElement.width || b.y < 0 || b.y > canvasElement.height) bullets.splice(i, 1);
+            });
+
+            if (playerMid.active) {
+                let distToBoss = Math.sqrt((playerMid.x - bossPos.x)**2 + (playerMid.y - floatY)**2);
+                
+                // CRITICAL DAMAGE LOGIC WITH DELAY (I-FRAMES)
+                if (distToBoss < 180) {
+                    let now = Date.now();
+                    if (isFullCharge) {
+                        if(now - lastHitTime > 800) {
+                            let dmg = 200;
+                            bossHP -= dmg;
+                            sfx.hit();
+                            createExplosion(bossPos.x, floatY, 80, "#00ffcc", 4);
+                            spawnPopText(playerMid.x, playerMid.y, "-" + dmg, "dmg-val");
+                            lastHitTime = now;
+                            lastCriticalTime = now + 1500; // Beri masa kebal 1.5 detik setelah berhasil HIT
+                            resetCharge();
+                        }
+                    } else if (charge > 0 && now > lastCriticalTime) {
+                        triggerCriticalHit(playerMid.x, playerMid.y);
+                        lastCriticalTime = now + 2000; // Delay 2 detik antar Critical Reset
+                    }
+                }
+
+                if (!isFullCharge) {
+                    if (isLoveGesture) {
+                        let movement = Math.sqrt((playerMid.x - lastPlayerMid.x)**2 + (playerMid.y - lastPlayerMid.y)**2);
+                        let isMoving = movement > 2;
+                        drawFatLove(pointer1, pointer2, isMoving);
+                        if (isMoving) {
+                            charge += movement * 0.15;
+                            sfx.charging(charge);
+                            $('#status-msg').text("CHARGING ENERGY: " + Math.floor(charge) + "%").css('color', '#ffff00');
+                        } else {
+                            $('#status-msg').text("MOVE TO GENERATE POWER!").css('color', '#00d2ff');
+                        }
+                    } else {
+                        $('#status-msg').text("MERGE HANDS: LOVE GESTURE").css('color', '#ff007f');
+                        // Titik untuk kedua Telunjuk (Pointers)
+                        drawPointer(pointer1.x, pointer1.y, '#00d2ff');
+                        drawPointer(pointer2.x, pointer2.y, '#ff007f');
+                        // Titik untuk kedua Jempol (Thumbs)
+                        drawPointer(thumb1.x, thumb1.y, '#00d2ff');
+                        drawPointer(thumb2.x, thumb2.y, '#ff007f');
+                    }
+                    if (charge >= 100) { charge = 100; sfx.chargeFull(); startAttackTimer(); }
+                } else {
+                    drawFullChargeAura(playerMid.x, playerMid.y);
+                }
+                lastPlayerMid = { x: playerMid.x, y: playerMid.y };
+            }
+        }
+
+        $('#charge-fill').css('width', Math.min(charge, 100) + '%');
+        $('#boss-hp-fill').css('width', Math.max(0, (bossHP/maxHP)*100) + '%');
+        if(bossHP <= 0 && !gameWon) { gameWon = true; sfx.win(); $('#win-screen').css('display', 'flex').hide().fadeIn(1000); }
+        canvasCtx.restore();
+    }
+
+    function triggerCriticalHit(x, y) {
+        charge = 0;
+        sfx.critical();
+        flashScreen();
+        $('#critical-alert').stop().fadeIn(100).fadeOut(1500);
+        createExplosion(x, y, 60, "#ff0000", 6);
+        spawnPopText(x, y, "CRITICAL ERROR!", "minus-val");
+        $('#status-msg').text("SYSTEM REBOOTING...").css('color', '#ff3333');
+    }
+
+    function triggerWeaponHit(x, y) {
+        if(!isFullCharge && charge > 0) {
+            let penalty = Math.floor(charge / 4);
+            charge = Math.max(0, charge - penalty);
+            sfx.damage();
+            flashScreen();
+            createExplosion(x, y, 30, "#ff0000", 2.5);
+            spawnPopText(x, y, "-" + penalty, "minus-val");
+        }
+    }
+
+    // --- RENDER FUNCTIONS ---
+
+    function drawFatLove(p1, p2, isMoving) {
+        canvasCtx.save();
+        let midX = (p1.x + p2.x) / 2;
+        let midY = (p1.y + p2.y) / 2 - 30;
+        let dist = Math.sqrt((p1.x - p2.x)**2 + (p1.y - p2.y)**2);
+        let size = Math.max(80, dist * 0.85); 
+        let color = isMoving ? "#ffff00" : "#00d2ff";
+        let auraAlpha = isMoving ? 0.4 : 0.2;
+        canvasCtx.globalAlpha = auraAlpha;
+        canvasCtx.shadowBlur = 30; canvasCtx.shadowColor = color;
+        canvasCtx.strokeStyle = color; canvasCtx.lineWidth = 15;
+        drawHeartPath(midX, midY, size);
+        canvasCtx.stroke();
+        canvasCtx.globalAlpha = 1.0; canvasCtx.lineWidth = 3;
+        canvasCtx.strokeStyle = "#ffffff"; canvasCtx.shadowBlur = 10;
+        drawHeartPath(midX, midY, size);
+        canvasCtx.stroke();
+        if(isMoving) {
+            canvasCtx.lineWidth = 1.5;
+            for(let i = 0; i < 3; i++) {
+                canvasCtx.strokeStyle = color;
+                let x1 = midX + (Math.random() - 0.5) * (size * 0.4);
+                let y1 = midY + (Math.random() * size * 0.5);
+                let x2 = midX + (Math.random() - 0.5) * (size * 0.6);
+                let y2 = midY + (size * 0.8);
+                drawLightning(x1, y1, x2, y2);
+            }
+            canvasCtx.strokeStyle = "#fff";
+            drawLightning(p1.x, p1.y, midX, midY + size/2);
+            drawLightning(p2.x, p2.y, midX, midY + size/2);
+        }
+        canvasCtx.restore();
+    }
+
+    function drawHeartPath(x, y, s) {
+        canvasCtx.beginPath();
+        canvasCtx.moveTo(x, y + s/4);
+        canvasCtx.bezierCurveTo(x - s/1.1, y - s/1.1, x - s, y + s/3, x, y + s);
+        canvasCtx.bezierCurveTo(x + s, y + s/3, x + s/1.1, y - s/1.1, x, y + s/4);
+    }
+
+    function drawFullChargeAura(x, y) {
+        canvasCtx.save();
+        let radius = 150 + Math.sin(frameCount * 0.3) * 10;
+        canvasCtx.shadowBlur = 50; canvasCtx.shadowColor = "#00ffcc";
+        canvasCtx.strokeStyle = "#00ffcc"; canvasCtx.lineWidth = 8;
+        canvasCtx.beginPath(); canvasCtx.arc(x, y, radius, 0, Math.PI*2); canvasCtx.stroke();
+        canvasCtx.setLineDash([30, 20]); canvasCtx.lineWidth = 4;
+        canvasCtx.beginPath(); canvasCtx.arc(x, y, radius + 15, frameCount*0.1, frameCount*0.1 + Math.PI*2); canvasCtx.stroke();
+        canvasCtx.setLineDash([]); canvasCtx.strokeStyle = "#ffffff"; canvasCtx.shadowBlur = 10;
+        for(let i=0; i<8; i++) {
+            let angle = (i / 8) * Math.PI * 2 + (frameCount * 0.08);
+            let x1 = x + Math.cos(angle) * (radius - 10);
+            let y1 = y + Math.sin(angle) * (radius - 10);
+            let x2 = x + Math.cos(angle) * (radius + 60);
+            let y2 = y + Math.sin(angle) * (radius + 60);
+            drawLightning(x1, y1, x2, y2);
+        }
+        canvasCtx.font = "100px Arial"; canvasCtx.textAlign = "center";
+        canvasCtx.fillText("⚡", x, y + 35);
+        canvasCtx.restore();
+    }
+
+    function drawLightning(x1, y1, x2, y2) {
+        let dist = Math.sqrt((x1-x2)**2 + (x2-x2)**2);
+        let steps = dist / 12;
+        canvasCtx.beginPath(); canvasCtx.moveTo(x1, y1);
+        for(let i=1; i<steps; i++) {
+            let tx = x1 + (x2-x1) * (i/steps) + (Math.random()-0.5)*30;
+            let ty = y1 + (y2-y1) * (i/steps) + (Math.random()-0.5)*30;
+            canvasCtx.lineTo(tx, ty);
+        }
+        canvasCtx.lineTo(x2, y2); canvasCtx.stroke();
+    }
+
+    function drawPointer(x, y, color) {
+        canvasCtx.beginPath(); canvasCtx.arc(x, y, 25, 0, Math.PI*2);
+        canvasCtx.fillStyle = color; canvasCtx.shadowBlur = 15; canvasCtx.shadowColor = color;
+        canvasCtx.fill();
+    }
+
+    function startAttackTimer() {
+        isFullCharge = true; timerValue = 5;
+        $('#timer-text').text(timerValue).show();
+        let ti = setInterval(() => {
+            if(!isFullCharge) { clearInterval(ti); return; }
+            timerValue--;
+            $('#timer-text').text(timerValue);
+            if(timerValue <= 0) { clearInterval(ti); resetCharge(); }
+        }, 1000);
+    }
+
+    function resetCharge() { 
+        isFullCharge = false; charge = 0; 
+        $('#timer-text').hide();
+        $('#status-msg').text("RECALIBRATING..."); 
+    }
+
+    function flashScreen() {
+        $('#hit-alert').css('opacity', '1');
+        setTimeout(() => { $('#hit-alert').css('opacity', '0'); }, 150);
+    }
+
+    function spawnPopText(x, y, txt, className) {
+        let correctedX = canvasElement.width - x; 
+        let $el = $('<div class="pop-text '+className+'">' + txt + '</div>').css({ left: correctedX, top: y });
+        $('body').append($el);
+        $el.animate({ top: y - 100, opacity: 0 }, 800, function() { $(this).remove(); });
+    }
+
+    init();
+</script>
+</body>
+</html>
