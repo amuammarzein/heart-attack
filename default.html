@@ -83,7 +83,6 @@
 <div id="start-menu" class="overlay">
     <h1 style="font-size: 3.5rem; margin-bottom: 0; letter-spacing: 5px;">HEART ATTACK</h1>
     <p style="color: var(--accent); margin-top: 10px;">STATUS : <span style="color:var(--danger)">SYSTEM INFECTED</span></p>
-    <select id="cam_select" style="margin-bottom: 20px; background:#222; color:#fff; border:none; padding:10px; border-radius:5px; font-family: 'Orbitron';"></select>
     <button class="btn-action" onclick="startGame()">START MISSION</button>
 </div>
 
@@ -151,11 +150,8 @@
     let charge = 0, bossHP = 1200, maxHP = 1200; 
     let bossPos = { x: 500, y: 300 }, bossTarget = { x: 500, y: 300 };
     let bullets = [], particles = [];
-    let lastHitTime = 0, lastCriticalTime = 0; 
+    let lastHitTime = 0, lastCriticalTime = 0; // Added tracker for critical delay
     let bossPhase = 1, timerValue = 5, frameCount = 0;
-    
-    // Variabel baru untuk efek getaran
-    let screenShake = 0;
     
     let pointer1 = { x: 0, y: 0, targetX: 0, targetY: 0 };
     let pointer2 = { x: 0, y: 0, targetX: 0, targetY: 0 };
@@ -182,117 +178,6 @@
             canvasCtx.beginPath(); canvasCtx.arc(this.x, this.y, this.size, 0, Math.PI*2);
             canvasCtx.fill(); canvasCtx.restore();
         }
-    }
-
-    // --- FUNGSI CUSTOM BOS BARU ---
-    function drawSciFiBoss(x, y, phase) {
-        canvasCtx.save();
-        
-        let time = frameCount * 0.02;
-        let mainColor, coreColor;
-        
-        // Penyesuaian Warna Berdasarkan Phase
-        if (phase === 1) {
-            mainColor = '#00f2ff'; coreColor = '#fff'; // Cyan (Initial Infection)
-        } else if (phase === 2) {
-            mainColor = '#ffae00'; coreColor = '#fff'; // Orange (System Spreading)
-        } else {
-            mainColor = '#ff003c'; coreColor = '#fff'; // Red (Critical Corruption)
-        }
-
-        // Efek guncangan internal boss (Glitch)
-        let shake = (phase === 3) ? (Math.random() - 0.5) * 10 : 0;
-        canvasCtx.translate(x + shake, y + shake);
-
-        // --- 1. GLOW RADIANCE (Cahaya Latar yang Lembut) ---
-        let radialGrad = canvasCtx.createRadialGradient(0, 0, 0, 0, 0, 180);
-        radialGrad.addColorStop(0, mainColor + '33');
-        radialGrad.addColorStop(1, 'transparent');
-        canvasCtx.fillStyle = radialGrad;
-        canvasCtx.beginPath();
-        canvasCtx.arc(0, 0, 180, 0, Math.PI * 2);
-        canvasCtx.fill();
-
-        // --- 2. MULTI-LAYERED CIRCLES (Lingkaran Statis & Berputar) ---
-        canvasCtx.shadowBlur = 15;
-        canvasCtx.shadowColor = mainColor;
-        canvasCtx.strokeStyle = mainColor;
-        
-        for(let i = 1; i <= 3; i++) {
-            canvasCtx.save();
-            canvasCtx.lineWidth = (i === 1) ? 3 : 1;
-            // Lingkaran dengan rotasi berbeda-beda
-            canvasCtx.rotate(time * (i * 0.5)); 
-            
-            // Lingkaran utama (Solid)
-            canvasCtx.beginPath();
-            canvasCtx.arc(0, 0, 60 + (i * 25), 0, Math.PI * 2);
-            canvasCtx.stroke();
-            
-            // Efek garis-garis kecil di dalam lingkaran (Geometric pattern)
-            if(i === 2) {
-                canvasCtx.beginPath();
-                for(let a = 0; a < Math.PI * 2; a += Math.PI/4) {
-                    canvasCtx.moveTo(Math.cos(a) * 85, Math.sin(a) * 85);
-                    canvasCtx.lineTo(Math.cos(a + Math.PI/2) * 85, Math.sin(a + Math.PI/2) * 85);
-                }
-                canvasCtx.globalAlpha = 0.4;
-                canvasCtx.stroke();
-            }
-            canvasCtx.restore();
-        }
-
-        // --- 3. THE DISK/ORBIT (Piringan Miring) ---
-        // Ini adalah bagian piringan lonjong yang memotong inti
-        canvasCtx.save();
-        canvasCtx.lineWidth = 4;
-        canvasCtx.shadowBlur = 25;
-        // Rotasi agar miring seperti di gambar
-        canvasCtx.rotate(Math.PI / 4 + time * 0.5); 
-        
-        // Piringan Luar
-        canvasCtx.beginPath();
-        canvasCtx.ellipse(0, 0, 160, 40, 0, 0, Math.PI * 2);
-        canvasCtx.stroke();
-        
-        // Efek partikel pada piringan
-        canvasCtx.fillStyle = "#fff";
-        for(let p = 0; p < 5; p++) {
-            let pAngle = time * 2 + (p * Math.PI / 2.5);
-            canvasCtx.beginPath();
-            canvasCtx.arc(Math.cos(pAngle) * 160, Math.sin(pAngle) * 40, 3, 0, Math.PI*2);
-            canvasCtx.fill();
-        }
-        canvasCtx.restore();
-
-        // --- 4. THE BRIGHT CORE (Inti Putih Terang) ---
-        // Layer 1: Core Glow
-        canvasCtx.shadowBlur = 50;
-        canvasCtx.fillStyle = coreColor;
-        canvasCtx.beginPath();
-        canvasCtx.arc(0, 0, 30 + Math.sin(time*10)*5, 0, Math.PI * 2);
-        canvasCtx.fill();
-        
-        // Layer 2: Core Flare (Garis silang tajam)
-        if(frameCount % 2 === 0) {
-            canvasCtx.lineWidth = 2;
-            canvasCtx.strokeStyle = "#fff";
-            canvasCtx.beginPath();
-            canvasCtx.moveTo(-50, 0); canvasCtx.lineTo(50, 0);
-            canvasCtx.moveTo(0, -50); canvasCtx.lineTo(0, 50);
-            canvasCtx.stroke();
-        }
-
-        // --- 5. FLOATING PARTICLES (Efek Serpihan/Debu) ---
-        canvasCtx.fillStyle = mainColor;
-        for(let d = 0; d < 15; d++) {
-            let ang = time + d;
-            let dist = 100 + (Math.sin(d) * 50);
-            canvasCtx.globalAlpha = Math.random();
-            canvasCtx.fillRect(Math.cos(ang) * dist, Math.sin(ang) * dist, 3, 3);
-        }
-
-        canvasCtx.restore();
     }
 
     function createExplosion(x, y, count, color, speed) {
@@ -388,19 +273,7 @@
         frameCount++;
         canvasElement.width = window.innerWidth;
         canvasElement.height = window.innerHeight;
-        
-        canvasCtx.save(); // Save global state
-
-        // --- EFEK SHAKE IMPLEMENTASI ---
-        if (screenShake > 0) {
-            let dx = (Math.random() - 0.5) * screenShake;
-            let dy = (Math.random() - 0.5) * screenShake;
-            canvasCtx.translate(dx, dy);
-            screenShake *= 0.9; // Decay getaran
-            if (screenShake < 0.5) screenShake = 0;
-        }
-        // -------------------------------
-
+        canvasCtx.save();
         canvasCtx.drawImage(results.image, 0, 0, canvasElement.width, canvasElement.height);
 
         let hpPercent = (bossHP / maxHP) * 100;
@@ -411,27 +284,29 @@
         let isLoveGesture = false;
 
         if (results.multiHandLandmarks && results.multiHandLandmarks.length >= 2) {
-            const h1_8 = results.multiHandLandmarks[0][8]; // Telunjuk P1
-            const h1_4 = results.multiHandLandmarks[0][4]; // Jempol P1
-            const h2_8 = results.multiHandLandmarks[1][8]; // Telunjuk P2
-            const h2_4 = results.multiHandLandmarks[1][4]; // Jempol P2
+        // Ambil Landmark
+        const h1_8 = results.multiHandLandmarks[0][8]; // Telunjuk P1
+        const h1_4 = results.multiHandLandmarks[0][4]; // Jempol P1
+        const h2_8 = results.multiHandLandmarks[1][8]; // Telunjuk P2
+        const h2_4 = results.multiHandLandmarks[1][4]; // Jempol P2
 
-            pointer1.targetX = h1_8.x * canvasElement.width;
-            pointer1.targetY = h1_8.y * canvasElement.height;
-            pointer2.targetX = h2_8.x * canvasElement.width;
-            pointer2.targetY = h2_8.y * canvasElement.height;
-            
-            thumb1.targetX = h1_4.x * canvasElement.width;
-            thumb1.targetY = h1_4.y * canvasElement.height;
-            thumb2.targetX = h2_4.x * canvasElement.width;
-            thumb2.targetY = h2_4.y * canvasElement.height;
+        // Update Target
+        pointer1.targetX = h1_8.x * canvasElement.width;
+        pointer1.targetY = h1_8.y * canvasElement.height;
+        pointer2.targetX = h2_8.x * canvasElement.width;
+        pointer2.targetY = h2_8.y * canvasElement.height;
+        
+        thumb1.targetX = h1_4.x * canvasElement.width;
+        thumb1.targetY = h1_4.y * canvasElement.height;
+        thumb2.targetX = h2_4.x * canvasElement.width;
+        thumb2.targetY = h2_4.y * canvasElement.height;
 
-            let distTips = Math.sqrt((pointer1.targetX - pointer2.targetX)**2 + (pointer1.targetY - pointer2.targetY)**2);
-            let distThumbs = Math.sqrt((thumb1.targetX - thumb2.targetX)**2 + (thumb1.targetY - thumb2.targetY)**2);
-            
-            if(distTips < 150 && distThumbs < 150) isLoveGesture = true;
-            playerMid.active = true;
-        } else { 
+        let distTips = Math.sqrt((pointer1.targetX - pointer2.targetX)**2 + (pointer1.targetY - pointer2.targetY)**2);
+        let distThumbs = Math.sqrt((thumb1.targetX - thumb2.targetX)**2 + (thumb1.targetY - thumb2.targetY)**2);
+        
+        if(distTips < 150 && distThumbs < 150) isLoveGesture = true;
+        playerMid.active = true;
+    }else { 
             playerMid.active = false; 
         }
 
@@ -455,9 +330,16 @@
             bossPos.y += (bossTarget.y - bossPos.y) * 0.05;
             let floatY = bossPos.y + Math.sin(frameCount * 0.1) * 25;
             
-            // --- REPLACE OLD BOSS RENDER WITH NEW FUNCTION ---
-            drawSciFiBoss(bossPos.x, floatY, bossPhase);
-            // -------------------------------------------------
+            canvasCtx.shadowBlur = 15;
+            canvasCtx.shadowColor = (bossPhase === 3) ? "#ff0000" : "#00f2ff";
+            canvasCtx.font = "bold 60px Orbitron";
+            canvasCtx.textAlign = "center";
+            let bossIcon = (bossPhase === 3) ? "╰(╬◣∀◢)╯" : (bossPhase === 2 ? "(◣_◢)" : "[⬢_⬢]");
+            let bossColor = "#ffffff"; // Default Putih (Phase 1)
+            if (bossPhase === 2) bossColor = "#ff8800"; // Orange (Phase 2)
+            if (bossPhase === 3) bossColor = "#ff3333"; // Merah (Phase 3)
+            canvasCtx.fillStyle = bossColor;
+            canvasCtx.fillText(bossIcon, bossPos.x, floatY);
 
             bullets.forEach((b, i) => {
                 b.x += b.vx; b.y += b.vy;
@@ -482,19 +364,15 @@
                             let dmg = 200;
                             bossHP -= dmg;
                             sfx.hit();
-                            
-                            // Trigger Shake for Boss Hit
-                            screenShake = 20;
-
                             createExplosion(bossPos.x, floatY, 80, "#00ffcc", 4);
                             spawnPopText(playerMid.x, playerMid.y, "-" + dmg, "dmg-val");
                             lastHitTime = now;
-                            lastCriticalTime = now + 1500; 
+                            lastCriticalTime = now + 1500; // Beri masa kebal 1.5 detik setelah berhasil HIT
                             resetCharge();
                         }
                     } else if (charge > 0 && now > lastCriticalTime) {
                         triggerCriticalHit(playerMid.x, playerMid.y);
-                        lastCriticalTime = now + 2000; 
+                        lastCriticalTime = now + 2000; // Delay 2 detik antar Critical Reset
                     }
                 }
 
@@ -512,8 +390,10 @@
                         }
                     } else {
                         $('#status-msg').text("MERGE HANDS: LOVE GESTURE").css('color', '#ff007f');
+                        // Titik untuk kedua Telunjuk (Pointers)
                         drawPointer(pointer1.x, pointer1.y, '#00d2ff');
                         drawPointer(pointer2.x, pointer2.y, '#ff007f');
+                        // Titik untuk kedua Jempol (Thumbs)
                         drawPointer(thumb1.x, thumb1.y, '#00d2ff');
                         drawPointer(thumb2.x, thumb2.y, '#ff007f');
                     }
@@ -528,16 +408,11 @@
         $('#charge-fill').css('width', Math.min(charge, 100) + '%');
         $('#boss-hp-fill').css('width', Math.max(0, (bossHP/maxHP)*100) + '%');
         if(bossHP <= 0 && !gameWon) { gameWon = true; sfx.win(); $('#win-screen').css('display', 'flex').hide().fadeIn(1000); }
-        
-        canvasCtx.restore(); // Restore global state (removes shake)
+        canvasCtx.restore();
     }
 
     function triggerCriticalHit(x, y) {
         charge = 0;
-        
-        // Trigger Shake for Critical Hit (Player Fails)
-        screenShake = 30;
-
         sfx.critical();
         flashScreen();
         $('#critical-alert').stop().fadeIn(100).fadeOut(1500);
@@ -550,10 +425,6 @@
         if(!isFullCharge && charge > 0) {
             let penalty = Math.floor(charge / 4);
             charge = Math.max(0, charge - penalty);
-            
-            // Trigger Shake for Player Damage
-            screenShake = 15;
-
             sfx.damage();
             flashScreen();
             createExplosion(x, y, 30, "#ff0000", 2.5);
