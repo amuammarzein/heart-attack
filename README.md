@@ -56,5 +56,6 @@ Terima kasih kepada Google MediaPipe untuk teknologi tracking tangan dan Google 
 
 ```text
 .
-├── index.html            # File tunggal utama (HTML, CSS, & JS)
+├── index.html            # Mode full, file tunggal utama (HTML, CSS, & JS)
+├── default.html          # Mode standart
 └── README.md             # Dokumentasi proyek
